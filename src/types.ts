@@ -6,6 +6,8 @@
 export interface ValidateOptions {
   /** Maximum allowed size in bytes. Files larger than this are rejected. */
   maxBytes?: number;
+  /** Minimum allowed size in bytes. Files smaller than this are rejected. */
+  minBytes?: number;
   /**
    * Accepted MIME types or extensions, mirroring the HTML `accept` attribute.
    * Examples: `"image/png"`, `"image/*"`, `".pdf"`. A `string[]` or a
@@ -16,7 +18,7 @@ export interface ValidateOptions {
 
 /** A single problem found while validating a file. */
 export interface ValidationError {
-  code: "too-large" | "wrong-type" | "empty";
+  code: "too-large" | "too-small" | "wrong-type" | "empty";
   message: string;
 }
 
@@ -51,6 +53,17 @@ export interface UploadProgress {
 /** Callback invoked as upload progress changes. */
 export type ProgressHandler = (progress: UploadProgress) => void;
 
+/** Extra context handed to {@link Uploader.putFile}. */
+export interface PutFileOptions {
+  /** Reports byte-level progress as the upload proceeds. */
+  onProgress?: ProgressHandler;
+  /**
+   * When the caller aborts this signal, an in-flight upload should stop and the
+   * returned promise should reject with an {@link AbortError}.
+   */
+  signal?: AbortSignal;
+}
+
 /**
  * Pluggable uploader. Implementations decide how to obtain a presigned URL and
  * how to push the file bytes. A {@link FakeUploader} is provided for tests and
@@ -63,9 +76,44 @@ export interface Uploader {
   putFile(
     file: File,
     target: PresignedTarget,
-    onProgress?: ProgressHandler,
+    options?: PutFileOptions,
   ): Promise<void>;
 }
 
 /** Lifecycle status of an upload. */
-export type UploadStatus = "idle" | "validating" | "uploading" | "success" | "error";
+export type UploadStatus =
+  | "idle"
+  | "validating"
+  | "uploading"
+  | "success"
+  | "error"
+  | "canceled";
+
+/** Lifecycle status of a single file inside a multi-file batch. */
+export type FileStatus =
+  | "pending"
+  | "validating"
+  | "uploading"
+  | "success"
+  | "error"
+  | "canceled";
+
+/** A stable, per-file record tracked by {@link useMultiFileUpload}. */
+export interface UploadItem {
+  /** Stable identifier, unique within the batch. */
+  id: string;
+  /** The underlying browser File. */
+  file: File;
+  /** Current lifecycle status for this file. */
+  status: FileStatus;
+  /** Byte-level progress for this file. */
+  progress: UploadProgress;
+  /** Validation problems found before upload, if any. */
+  errors: ValidationError[];
+  /** Upload error, if the upload failed. */
+  error: Error | null;
+  /** Canonical URL once the file has been uploaded. */
+  fileUrl: string | null;
+  /** Object URL for an image preview, or `null` for non-images. */
+  previewUrl: string | null;
+}

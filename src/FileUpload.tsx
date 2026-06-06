@@ -27,6 +27,7 @@ export function FileUpload(props: FileUploadProps): JSX.Element {
   const {
     uploader,
     maxBytes,
+    minBytes,
     accept,
     label = "Choose a file",
     disabled = false,
@@ -44,9 +45,12 @@ export function FileUpload(props: FileUploadProps): JSX.Element {
     fileUrl,
     isUploading,
     upload,
+    cancel,
+    retry,
   } = useFileUpload({
     uploader,
     maxBytes,
+    minBytes,
     accept,
     onSuccess: onUploaded,
     onError,
@@ -73,14 +77,29 @@ export function FileUpload(props: FileUploadProps): JSX.Element {
       />
 
       {isUploading && (
-        <progress
-          data-testid="upload-progress"
-          max={100}
-          value={progress.percent}
-          aria-label="Upload progress"
-        >
-          {progress.percent}%
-        </progress>
+        <>
+          <progress
+            data-testid="upload-progress"
+            max={100}
+            value={progress.percent}
+            aria-label="Upload progress"
+          >
+            {progress.percent}%
+          </progress>
+          <button type="button" data-testid="upload-cancel" onClick={cancel}>
+            Cancel
+          </button>
+        </>
+      )}
+
+      {(status === "error" || status === "canceled") && (
+        <button type="button" data-testid="upload-retry" onClick={() => void retry()}>
+          Retry
+        </button>
+      )}
+
+      {status === "canceled" && (
+        <p data-testid="upload-canceled">Upload canceled.</p>
       )}
 
       {status === "success" && fileUrl && (

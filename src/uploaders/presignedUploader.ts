@@ -1,9 +1,10 @@
 import type {
   PresignedTarget,
-  ProgressHandler,
+  PutFileOptions,
   Uploader,
 } from "../types.js";
 import { makeProgress } from "../progress.js";
+import { AbortError } from "../errors.js";
 
 /** Configuration for the {@link PresignedUploader}. */
 export interface PresignedUploaderOptions {
@@ -37,9 +38,16 @@ export class PresignedUploader implements Uploader {
   putFile(
     file: File,
     target: PresignedTarget,
-    onProgress?: ProgressHandler,
+    options: PutFileOptions = {},
   ): Promise<void> {
+    const { onProgress, signal } = options;
+
     return new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new AbortError());
+        return;
+      }
+
       const xhr = new XMLHttpRequest();
       xhr.open(this.method, target.uploadUrl, true);
 
@@ -48,6 +56,10 @@ export class PresignedUploader implements Uploader {
         xhr.setRequestHeader(name, value);
       }
 
+      const onAbort = (): void => xhr.abort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+      const cleanup = (): void => signal?.removeEventListener("abort", onAbort);
+
       xhr.upload.onprogress = (event: ProgressEvent) => {
         if (event.lengthComputable) {
           onProgress?.(makeProgress(event.loaded, event.total));
@@ -55,6 +67,7 @@ export class PresignedUploader implements Uploader {
       };
 
       xhr.onload = () => {
+        cleanup();
         if (xhr.status >= 200 && xhr.status < 300) {
           onProgress?.(makeProgress(file.size, file.size));
           resolve();
@@ -63,8 +76,14 @@ export class PresignedUploader implements Uploader {
         }
       };
 
-      xhr.onerror = () => reject(new Error("Network error during upload."));
-      xhr.onabort = () => reject(new Error("Upload was aborted."));
+      xhr.onerror = () => {
+        cleanup();
+        reject(new Error("Network error during upload."));
+      };
+      xhr.onabort = () => {
+        cleanup();
+        reject(new AbortError());
+      };
 
       xhr.send(file);
     });

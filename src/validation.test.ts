@@ -62,4 +62,25 @@ describe("validateFile", () => {
     expect(codes).toContain("too-large");
     expect(codes).toContain("wrong-type");
   });
+
+  it("rejects a file below the minimum size", () => {
+    const file = fileOf("tiny.png", "image/png", 50);
+    const result = validateFile(file, { minBytes: 1000 });
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((e) => e.code)).toContain("too-small");
+  });
+
+  it("does not double-report empty files as too-small", () => {
+    const file = fileOf("empty.png", "image/png", 0);
+    const result = validateFile(file, { minBytes: 1000 });
+    const codes = result.errors.map((e) => e.code);
+    expect(codes).toContain("empty");
+    expect(codes).not.toContain("too-small");
+  });
+
+  it("accepts a file within an explicit size band", () => {
+    const file = fileOf("ok.png", "image/png", 500);
+    const result = validateFile(file, { minBytes: 100, maxBytes: 1000 });
+    expect(result.valid).toBe(true);
+  });
 });

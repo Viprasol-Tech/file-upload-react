@@ -76,4 +76,58 @@ describe("useFileUpload", () => {
     expect(result.current.fileUrl).toBeNull();
     expect(result.current.progress.percent).toBe(0);
   });
+
+  it("marks an upload as canceled when aborted mid-flight", async () => {
+    const uploader = new FakeUploader({ steps: 10, delayMs: 5 });
+    const { result } = renderHook(() => useFileUpload({ uploader }));
+
+    const file = fileOf("a.png", "image/png", 1000);
+    let pending: Promise<string | null>;
+    act(() => {
+      pending = result.current.upload(file);
+    });
+    await waitFor(() => expect(result.current.status).toBe("uploading"));
+
+    act(() => result.current.cancel());
+    await act(async () => {
+      await pending;
+    });
+
+    expect(result.current.status).toBe("canceled");
+    expect(uploader.uploaded).toHaveLength(0);
+  });
+
+  it("retry re-runs the last file after a failure", async () => {
+    // First uploader fails; we swap to a working one and retry.
+    const failing = new FakeUploader({ failWith: new Error("boom") });
+    const { result, rerender } = renderHook(
+      ({ up }) => useFileUpload({ uploader: up }),
+      { initialProps: { up: failing } },
+    );
+
+    const file = fileOf("a.png", "image/png", 100);
+    await act(async () => {
+      await result.current.upload(file);
+    });
+    expect(result.current.status).toBe("error");
+
+    const working = new FakeUploader();
+    rerender({ up: working });
+
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(result.current.status).toBe("success");
+    expect(working.uploaded).toHaveLength(1);
+  });
+
+  it("retry resolves to null when there is no prior file", async () => {
+    const uploader = new FakeUploader();
+    const { result } = renderHook(() => useFileUpload({ uploader }));
+    let out: string | null = "x";
+    await act(async () => {
+      out = await result.current.retry();
+    });
+    expect(out).toBeNull();
+  });
 });

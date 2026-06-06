@@ -51,4 +51,43 @@ describe("<FileUpload>", () => {
     );
     expect(uploader.uploaded).toHaveLength(0);
   });
+
+  it("offers a retry button after an upload failure", async () => {
+    const uploader = new FakeUploader({ failWith: new Error("boom") });
+    render(<FileUpload uploader={uploader} label="Upload" />);
+
+    const input = screen.getByLabelText("Upload") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [fileOf("a.png", "image/png", 100)] },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("file-upload").getAttribute("data-status")).toBe(
+        "error",
+      ),
+    );
+    expect(screen.getByTestId("upload-retry")).toBeTruthy();
+    expect(screen.getByTestId("upload-error")).toBeTruthy();
+  });
+
+  it("cancels an in-flight upload and shows the canceled state", async () => {
+    const uploader = new FakeUploader({ steps: 10, delayMs: 5 });
+    render(<FileUpload uploader={uploader} label="Upload" />);
+
+    const input = screen.getByLabelText("Upload") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [fileOf("a.png", "image/png", 1000)] },
+    });
+
+    const cancelBtn = await screen.findByTestId("upload-cancel");
+    fireEvent.click(cancelBtn);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("file-upload").getAttribute("data-status")).toBe(
+        "canceled",
+      ),
+    );
+    expect(screen.getByTestId("upload-canceled")).toBeTruthy();
+    expect(uploader.uploaded).toHaveLength(0);
+  });
 });

@@ -54,6 +54,17 @@ export function validateFile(file: File, options: ValidateOptions = {}): Validat
     });
   }
 
+  if (
+    typeof options.minBytes === "number" &&
+    file.size > 0 &&
+    file.size < options.minBytes
+  ) {
+    errors.push({
+      code: "too-small",
+      message: `File is ${file.size} bytes, which is below the minimum of ${options.minBytes} bytes.`,
+    });
+  }
+
   const patterns = normalizeAccept(options.accept);
   if (patterns.length > 0) {
     const ok = patterns.some((p) => matchesPattern(file, p));
